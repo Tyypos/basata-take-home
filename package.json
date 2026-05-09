@@ -7,7 +7,8 @@
         "dev": "tsx watch src/index.ts",
         "build": "tsc",
         "start": "node dist/src/index.js",
-        "smoke": "tsx scripts/smoke-test.ts"
+        "smoke": "tsx scripts/smoke-test.ts",
+        "reset": "tsx scripts/reset.ts"
     },
     "repository": {
         "type": "git",

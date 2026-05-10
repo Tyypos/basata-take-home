@@ -16,7 +16,7 @@ interface VapiToolCall {
     id: string;
     function: {
         name: string;
-        arguments: string; // JSON string per VAPI/OpenAI convention
+        arguments: string | Record<string, unknown> | null | undefined;
     };
 }
 
@@ -65,20 +65,38 @@ webhookRouter.post('/webhook', async (req: Request, res: Response) => {
     const results = await Promise.all(
         toolCalls.map(async (call) => {
             const toolName = call.function?.name;
-            const argsJson = call.function?.arguments ?? '{}';
+            const rawArgs = call.function?.arguments;
 
+            // VAPI sends args as an object (Tools API). Legacy / OpenAI Functions
+            // sent them as a JSON-encoded string. Handle both for resilience.
             let parsedArgs: unknown;
-            try {
-                parsedArgs = JSON.parse(argsJson);
-            } catch (err) {
-                log.error('tool-call: invalid JSON args', {
+            if (rawArgs == null) {
+                parsedArgs = {};
+            } else if (typeof rawArgs === 'string') {
+                try {
+                    parsedArgs = JSON.parse(rawArgs);
+                } catch (err) {
+                    log.error('tool-call: invalid JSON args', {
+                        toolCallId: call.id,
+                        toolName,
+                        rawArgs,
+                    });
+                    return {
+                        toolCallId: call.id,
+                        error: 'Tool arguments were not valid JSON.',
+                    };
+                }
+            } else if (typeof rawArgs === 'object') {
+                parsedArgs = rawArgs;
+            } else {
+                log.error('tool-call: unexpected args type', {
                     toolCallId: call.id,
                     toolName,
-                    argsJson,
+                    argsType: typeof rawArgs,
                 });
                 return {
                     toolCallId: call.id,
-                    error: 'Tool arguments were not valid JSON.',
+                    error: 'Tool arguments had an unexpected format.',
                 };
             }
 

@@ -11,7 +11,7 @@
 // against the LLM hallucinating tool names that aren't registered.
 
 import type { ToolContext, ToolHandler, ToolResult } from './types.js';
-import { lookupPatient } from './lookupPatient/index.js';
+import { lookupPatient } from './lookupPatient/handler.js';
 
 // Registry: tool name → handler. New tools get added here.
 // The keys MUST match the function names configured in the VAPI assistant

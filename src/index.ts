@@ -1,12 +1,18 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
 import 'dotenv/config';
+import { webhookRouter } from './routes/webhook.js';
 
 const app = express();
 app.use(express.json());
 
-app.post('/vapi/webhook', (req: Request, res: Response) => {
-    console.log(JSON.stringify(req.body, null, 2));
-    res.json({ results: [] });
+// VAPI tool webhook routes mounted under /vapi.
+// Single endpoint /vapi/webhook handles all tool calls; the dispatcher routes
+// by tool name internally. See routes/webhook.ts for the full payload shape.
+app.use('/vapi', webhookRouter);
+
+// Lightweight health check for ngrok/uptime monitors.
+app.get('/health', (_req, res) => {
+    res.json({ status: 'ok' });
 });
 
 const PORT = process.env.PORT ?? 3000;

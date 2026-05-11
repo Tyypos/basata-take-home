@@ -422,8 +422,68 @@ async function mutationTests(): Promise<TestResult[]> {
         }),
     );
 
-    // TODO: list_patient_appointments
-    //   - Should return the appointment we just booked
+    // 10. list_patient_appointments — the appointment booked in step 7 should
+    //     show up. We pass include_past=true so the test is robust against the
+    //     slot's start_time being before "now" (the EMR returns same-day slots
+    //     and the test could run after 4 PM local time).
+    results.push(
+        await runTest({
+            name: 'list_patient_appointments: includes the booked appointment',
+            toolName: 'list_patient_appointments',
+            args: {
+                patient_id: state.newPatientId,
+                include_past: true,
+            },
+            expect: (r) => {
+                if (r.status !== 'success')
+                    return `expected status=success, got ${r.status}`;
+                if (!Array.isArray(r.appointments) || r.appointments.length === 0)
+                    return 'expected at least one appointment';
+                const ours = r.appointments.find(
+                    (a: { id?: string }) => a.id === state.bookedAppointmentId,
+                );
+                if (!ours)
+                    return `booked appointment ${state.bookedAppointmentId} not found in list`;
+                if (ours.status !== 'scheduled')
+                    return `expected status=scheduled, got ${ours.status}`;
+                if (ours.appointment_type !== 'new_patient')
+                    return `appointment_type mismatch: ${ours.appointment_type}`;
+                if (
+                    typeof ours.provider_name !== 'string' ||
+                    !ours.provider_name.startsWith('Dr. ')
+                )
+                    return `provider_name not hydrated: ${ours.provider_name}`;
+                if (typeof ours.is_telehealth !== 'boolean')
+                    return 'is_telehealth must be boolean';
+                if (!ours.start_time || !ours.end_time)
+                    return 'missing start_time/end_time';
+                if (!('reason' in ours))
+                    return 'reason field must be present (nullable)';
+                return true;
+            },
+        }),
+    );
+
+    // 11. list_patient_appointments — invalid args (extra field rejected).
+    results.push(
+        await runTest({
+            name: 'list_patient_appointments: strict schema rejects unknown field',
+            toolName: 'list_patient_appointments',
+            args: {
+                patient_id: state.newPatientId,
+                bogus_filter: 'nope',
+            },
+            expect: () => 'expected tool error, got result',
+        }).then((r) => {
+            if (
+                r.detail?.startsWith('tool error: Invalid arguments:') &&
+                r.detail.includes('bogus_filter')
+            ) {
+                return { name: r.name, passed: true };
+            }
+            return r;
+        }),
+    );
 
     // TODO: cancel_appointment
     //   - Cancel state.bookedAppointmentId

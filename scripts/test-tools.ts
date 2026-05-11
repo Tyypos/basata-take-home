@@ -34,6 +34,11 @@ const state: {
     newPatientId?: string;
     bookedAppointmentId?: string;
     rescheduledAppointmentId?: string;
+    candidateSlot?: {
+        provider_id: string;
+        start_time: string;
+        appointment_type: string;
+    };
 } = {};
 
 async function callTool(
@@ -249,10 +254,97 @@ async function mutationTests(): Promise<TestResult[]> {
         }),
     );
 
-    // TODO: find_available_slots
-    //   - Requires state.newPatientId
-    //   - Test: success path with appointment_type=new_patient
-    //   - Test: no_slots path with overly restrictive filter (e.g., days_of_week=SAT)
+    // 4. find_available_slots — success path. Uses newPatientId from step 1.
+    results.push(
+        await runTest({
+            name: 'find_available_slots: new_patient returns 1-3 hydrated slots',
+            toolName: 'find_available_slots',
+            args: {
+                patient_id: state.newPatientId,
+                appointment_type: 'new_patient',
+            },
+            expect: (r) => {
+                if (r.status !== 'success')
+                    return `expected status=success, got ${r.status}`;
+                if (!Array.isArray(r.slots) || r.slots.length === 0)
+                    return 'expected at least one slot';
+                if (r.slots.length > 3)
+                    return `slot cap breached: got ${r.slots.length}`;
+                const s = r.slots[0];
+                if (!s.provider_id || !s.start_time || !s.end_time)
+                    return 'slot missing required fields';
+                if (typeof s.is_telehealth !== 'boolean')
+                    return 'slot.is_telehealth must be boolean';
+                if (s.appointment_type !== 'new_patient')
+                    return `slot.appointment_type mismatch: ${s.appointment_type}`;
+                if (
+                    typeof s.provider_name !== 'string' ||
+                    !s.provider_name.startsWith('Dr. ')
+                )
+                    return `provider_name not hydrated: ${s.provider_name}`;
+                state.candidateSlot = {
+                    provider_id: s.provider_id,
+                    start_time: s.start_time,
+                    appointment_type: s.appointment_type,
+                };
+                return true;
+            },
+        }),
+    );
+
+    // 5. find_available_slots — no_slots path. Saturday-only is impossible:
+    //    all providers' restrictions exclude Saturdays.
+    results.push(
+        await runTest({
+            name: 'find_available_slots: restrictive filter returns no_slots with searched_with',
+            toolName: 'find_available_slots',
+            args: {
+                patient_id: state.newPatientId,
+                appointment_type: 'new_patient',
+                days_of_week: 'SAT',
+            },
+            expect: (r) => {
+                if (r.status !== 'no_slots')
+                    return `expected status=no_slots, got ${r.status}`;
+                if (!r.searched_with)
+                    return 'no_slots must include searched_with';
+                if (r.searched_with.days_of_week !== 'SAT')
+                    return `searched_with.days_of_week mismatch: ${r.searched_with.days_of_week}`;
+                if (r.searched_with.appointment_type !== 'new_patient')
+                    return 'searched_with.appointment_type missing';
+                if ('patient_id' in r.searched_with)
+                    return 'searched_with should not echo patient_id';
+                return true;
+            },
+        }),
+    );
+
+    // 6. find_available_slots — invalid args path (bad date format).
+    results.push(
+        await runTest({
+            name: 'find_available_slots: rejects malformed start_date',
+            toolName: 'find_available_slots',
+            args: {
+                patient_id: state.newPatientId,
+                appointment_type: 'new_patient',
+                start_date: '06/01/2026',
+            },
+            expect: () => {
+                // Reaching here means the tool returned ok:true, which is wrong.
+                return 'expected tool error from invalid start_date, got result';
+            },
+        }).then((r) => {
+            // Invert: we WANT this to fail validation. The runner reports a
+            // failed `passed` flag when error is set, so flip its verdict.
+            if (
+                r.detail?.startsWith('tool error: Invalid arguments:') &&
+                r.detail.includes('start_date')
+            ) {
+                return { name: r.name, passed: true };
+            }
+            return r;
+        }),
+    );
 
     // TODO: book_appointment
     //   - Requires a slot from find_available_slots

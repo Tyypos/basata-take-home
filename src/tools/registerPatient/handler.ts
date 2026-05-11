@@ -37,7 +37,10 @@ const argsSchema = z
             .regex(/^\d{4}-\d{2}-\d{2}$/, 'date_of_birth must be YYYY-MM-DD'),
         phone: z
             .string()
-            .regex(/^\+[1-9]\d{1,14}$/, 'phone must be E.164 (e.g. +15551234567)'),
+            .regex(
+                /^\+[1-9]\d{1,14}$/,
+                'phone must be E.164 (e.g. +15551234567)',
+            ),
     })
     .strict();
 
@@ -66,7 +69,7 @@ export const registerPatient: ToolHandler = async (rawArgs, ctx) => {
             date_of_birth,
             phone,
         });
-        log.info('register_patient: created', { patientId: patient.id });
+        log.info('register_patient: created');
         return {
             ok: true,
             data: {
@@ -92,9 +95,7 @@ export const registerPatient: ToolHandler = async (rawArgs, ctx) => {
                 );
 
                 if (match) {
-                    log.info('register_patient: already_registered', {
-                        patientId: match.id,
-                    });
+                    log.info('register_patient: already_registered');
                     return {
                         ok: true,
                         data: {
@@ -107,9 +108,12 @@ export const registerPatient: ToolHandler = async (rawArgs, ctx) => {
                     };
                 }
 
-                log.warn('register_patient: phone_conflict (identity mismatch)', {
-                    matchCount: existing.length,
-                });
+                log.warn(
+                    'register_patient: phone_conflict (identity mismatch)',
+                    {
+                        matchCount: existing.length,
+                    },
+                );
                 // Intentionally omit any patient details — PHI guardrail.
                 return {
                     ok: true,
@@ -117,10 +121,13 @@ export const registerPatient: ToolHandler = async (rawArgs, ctx) => {
                 };
             } catch (lookupErr) {
                 if (lookupErr instanceof EmrError) {
-                    log.error('register_patient: conflict disambiguation failed', {
-                        name: lookupErr.name,
-                        message: lookupErr.message,
-                    });
+                    log.error(
+                        'register_patient: conflict disambiguation failed',
+                        {
+                            name: lookupErr.name,
+                            message: lookupErr.message,
+                        },
+                    );
                     return {
                         ok: false,
                         error: 'I had trouble completing your registration. Let me transfer you to someone who can help.',

@@ -121,3 +121,23 @@ Each tool should have tests covering:
 3. Where applicable, a guardrail check (e.g., PHI-aware response, defensive filter)
 
 Run `npm test` before declaring a tool done. All tests must pass.
+
+## PHI in logs
+
+Never log:
+
+- patient_id, appointment_id
+- full names, full phone numbers, email addresses
+- date of birth
+
+Use phone suffix (last 4 digits) or hashed values when correlation is needed.
+For tracing within a single conversation, the per-request `requestId` is
+enough — every log line already includes it.
+
+Acceptable to log:
+
+- enum values (status, appointment_type, specialty)
+- counts (matchCount, emrCount, returnedCount)
+- non-PHI flags and metadata
+
+Reference: `src/tools/registerPatient/handler.ts` and `src/tools/lookupPatient/handler.ts` for the established pattern.

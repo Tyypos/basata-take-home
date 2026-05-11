@@ -78,6 +78,8 @@ src/tools/lookupPatient/ is the canonical pattern. Match it.
 - Don't modify README.md.
 - Don't modify existing tools (lookup_patient) or core infrastructure
   (dispatcher, types, logger, EMR layer) unless asked.
+- VAPI tool descriptions cap at 1000 chars. Aim for ~800 to leave headroom.
+  Move per-field guidance into parameter property descriptions when needed.
 
 ## Anti-patterns to avoid
 

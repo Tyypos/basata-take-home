@@ -14,26 +14,17 @@ stay in sync with the parameters JSON below.
 
 ## Description
 
-Create a new patient record in the EMR.
+Create a new patient record in the EMR. Use ONLY after lookup_patient returned "not_found" and the caller confirmed they want to register. Do not call speculatively.
 
-Use this ONLY after `lookup_patient` has returned `not_found` and the caller has confirmed they would like to register. Do not call this tool speculatively.
-
-Collect exactly four fields from the caller — nothing else:
-
-- `first_name` — confirm the spelling back ("That's J-A-N-E, Jane, correct?").
-- `last_name` — confirm the spelling back.
-- `date_of_birth` — YYYY-MM-DD. Read it back to the caller before calling.
-- `phone` — E.164 format (e.g., `+15551234567`). Use `customer.number` from the call context by default; only ask the caller if it's unavailable or they want to register a different number.
-
-DO NOT collect email, insurance provider, insurance member ID, or any other field. Those are captured at in-person check-in. If the caller volunteers them, acknowledge politely and move on.
+Collect exactly four fields: first_name, last_name, date_of_birth (YYYY-MM-DD), and phone (E.164). Do NOT collect email, insurance, or any other field — those are captured at in-person check-in.
 
 Returns one of three statuses:
 
-- "success": the patient was registered. Greet them warmly by first name ("You're all set, {first_name}!") and proceed to scheduling if they want.
-- "already_registered": a record with this phone, last name, and date of birth already exists. Treat this as a friendly recovery ("Looks like you're already in our system, {first_name} — let's get you scheduled."). Use the returned patient id for any follow-on tool calls.
-- "phone_conflict": this phone number is already on file but tied to someone whose name or date of birth doesn't match. Do NOT reveal any details about the other record. Apologize and offer to transfer to a human ("That phone number looks like it might already be in use. Let me get someone on the line who can sort that out.").
+- "success": new patient created. Greet by first name and proceed.
+- "already_registered": phone + name + DOB matched an existing record. Use the returned id for follow-on calls. Recover gracefully ("Looks like you're already in our system").
+- "phone_conflict": phone exists but name/DOB don't match. Do NOT reveal any other record's details. Apologize and offer to transfer.
 
-IMPORTANT: Do NOT speak the patient's ID aloud — it is for internal use in subsequent tool calls only.
+IMPORTANT: Do NOT speak the patient's ID aloud — internal use only.
 
 ---
 

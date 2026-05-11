@@ -14,18 +14,19 @@ stay in sync with the parameters JSON below.
 
 ## Description
 
-Find an existing patient record in the EMR.
-Use this at the START of every call to identify the caller before doing anything else.
-First, try the caller's phone number (available from customer.number in the call context).
-If the result is "not_found", ask the caller for their last name and date of birth, then call this tool again with both fields.
+Find an existing patient record in the EMR. Use this at the START of every call to identify the caller before doing anything else.
 
-Returns one of three statuses:
+First, try the caller's phone number (from customer.number in the call context). If customer.number is missing or not present, do NOT invent a phone value AND do NOT call this tool with empty args — first ask the caller for their last name and date of birth, then call this tool with both of those fields together.
 
-- "found": single match. Greet the caller by first name and proceed.
-- "not_found": no match. Offer to register them as a new patient using register_patient.
-- "ambiguous": multiple matches (rare). Ask a clarifying question (e.g., first name) and call again with all three fields.
+If a phone lookup returns "not_found", ask the caller for their last name and date of birth, then call again with both fields.
 
-IMPORTANT: Do NOT speak the patient's ID aloud — it is for internal use in subsequent tool calls only.
+Returns:
+
+- "found": single match. Greet by first name and proceed.
+- "not_found": no match. Offer register_patient.
+- "ambiguous": multiple matches. Ask for first name and call again with all three.
+
+IMPORTANT: Do NOT speak the patient's ID aloud — internal use only.
 
 ---
 

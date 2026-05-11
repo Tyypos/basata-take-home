@@ -546,9 +546,156 @@ async function mutationTests(): Promise<TestResult[]> {
         }),
     );
 
-    // TODO: reschedule_appointment
-    //   - Book a new appointment, then reschedule it to a different slot
-    //   - Verify the original is cancelled and new is scheduled
+    // ── Setup for reschedule tests ──────────────────────────────────────────
+    // state.bookedAppointmentId was cancelled in step 12, so we book a fresh
+    // appointment (the "original") and pick a different slot to move it to.
+    // These setup calls aren't asserted as tests; downstream tests will fail
+    // loudly with helpful messages if setup didn't produce what's expected.
+    const setupFind1 = await callTool('find_available_slots', {
+        patient_id: state.newPatientId,
+        appointment_type: 'new_patient',
+    });
+    const originalSlot = setupFind1.result?.slots?.[0];
+    const setupBook = await callTool('book_appointment', {
+        patient_id: state.newPatientId,
+        provider_id: originalSlot?.provider_id,
+        start_time: originalSlot?.start_time,
+        appointment_type: 'new_patient',
+    });
+    const preRescheduleApptId: string | undefined =
+        setupBook.result?.appointment?.id;
+
+    // Target needs to be on a different DAY than the original — the EMR
+    // enforces per-patient time exclusivity AND blocks overlapping windows
+    // (booking prov_patel @ 08:15 when you already have prov_martinez @
+    // 08:00-08:30 fails as a conflict, not just identical-start-time).
+    // Day+1 sidesteps all overlap concerns.
+    const nextDay = (() => {
+        const d = new Date(originalSlot?.start_time ?? Date.now());
+        d.setUTCDate(d.getUTCDate() + 1);
+        return d.toISOString().slice(0, 10);
+    })();
+    const setupFind2 = await callTool('find_available_slots', {
+        patient_id: state.newPatientId,
+        appointment_type: 'new_patient',
+        start_date: nextDay,
+    });
+    const targetSlot = setupFind2.result?.slots?.[0];
+
+    // 15. reschedule_appointment — success path.
+    results.push(
+        await runTest({
+            name: 'reschedule_appointment: moves to new slot, original cancelled',
+            toolName: 'reschedule_appointment',
+            args: {
+                appointment_id: preRescheduleApptId,
+                new_start_time: targetSlot?.start_time,
+                new_provider_id: targetSlot?.provider_id,
+                appointment_type: 'new_patient',
+            },
+            expect: (r) => {
+                if (r.status !== 'success')
+                    return `expected status=success, got ${r.status}`;
+                if (!r.new_appointment?.id) return 'missing new_appointment.id';
+                if (r.new_appointment.id === preRescheduleApptId)
+                    return 'new_appointment.id should differ from original';
+                if (r.new_appointment.start_time !== targetSlot?.start_time)
+                    return `new start_time mismatch: ${r.new_appointment.start_time} vs ${targetSlot?.start_time}`;
+                if (typeof r.new_appointment.is_telehealth !== 'boolean')
+                    return 'new_appointment.is_telehealth must be boolean';
+                if (
+                    typeof r.new_appointment.provider_name !== 'string' ||
+                    !r.new_appointment.provider_name.startsWith('Dr. ')
+                )
+                    return `new_appointment.provider_name not hydrated: ${r.new_appointment.provider_name}`;
+                if (
+                    !r.cancelled_appointment?.start_time ||
+                    r.cancelled_appointment.start_time !== originalSlot?.start_time
+                )
+                    return `cancelled_appointment.start_time mismatch: ${r.cancelled_appointment?.start_time} vs ${originalSlot?.start_time}`;
+                if (
+                    typeof r.cancelled_appointment?.provider_name !== 'string' ||
+                    !r.cancelled_appointment.provider_name.startsWith('Dr. ')
+                )
+                    return `cancelled_appointment.provider_name not hydrated: ${r.cancelled_appointment?.provider_name}`;
+                state.rescheduledAppointmentId = r.new_appointment.id;
+                return true;
+            },
+        }),
+    );
+
+    // 16. Verify via list: original is cancelled, new is scheduled.
+    results.push(
+        await runTest({
+            name: 'reschedule_appointment: list reflects new scheduled and original cancelled',
+            toolName: 'list_patient_appointments',
+            args: {
+                patient_id: state.newPatientId,
+                include_past: true,
+                include_cancelled: true,
+            },
+            expect: (r) => {
+                if (r.status !== 'success')
+                    return `expected status=success, got ${r.status}`;
+                const original = r.appointments.find(
+                    (a: { id: string }) => a.id === preRescheduleApptId,
+                );
+                const newly = r.appointments.find(
+                    (a: { id: string }) =>
+                        a.id === state.rescheduledAppointmentId,
+                );
+                if (!original)
+                    return 'original appointment not present in list';
+                if (!newly) return 'new appointment not present in list';
+                if (original.status !== 'cancelled')
+                    return `original status should be cancelled, got ${original.status}`;
+                if (newly.status !== 'scheduled')
+                    return `new status should be scheduled, got ${newly.status}`;
+                return true;
+            },
+        }),
+    );
+
+    // 17. reschedule_appointment — original_not_found path.
+    results.push(
+        await runTest({
+            name: 'reschedule_appointment: unknown original returns original_not_found',
+            toolName: 'reschedule_appointment',
+            args: {
+                appointment_id: 'appt_does_not_exist_xyz',
+                new_start_time:
+                    targetSlot?.start_time ?? '2099-01-01T10:00:00',
+                new_provider_id: targetSlot?.provider_id ?? 'prov_unknown',
+                appointment_type: 'new_patient',
+            },
+            expect: (r) => {
+                if (r.status !== 'original_not_found')
+                    return `expected status=original_not_found, got ${r.status}`;
+                return true;
+            },
+        }),
+    );
+
+    // 18. reschedule_appointment — original_not_scheduled. The previously
+    //     rescheduled (now cancelled) appointment is a good test subject.
+    results.push(
+        await runTest({
+            name: 'reschedule_appointment: cancelled original returns original_not_scheduled',
+            toolName: 'reschedule_appointment',
+            args: {
+                appointment_id: preRescheduleApptId,
+                new_start_time:
+                    targetSlot?.start_time ?? '2099-01-01T10:00:00',
+                new_provider_id: targetSlot?.provider_id ?? 'prov_unknown',
+                appointment_type: 'new_patient',
+            },
+            expect: (r) => {
+                if (r.status !== 'original_not_scheduled')
+                    return `expected status=original_not_scheduled, got ${r.status}`;
+                return true;
+            },
+        }),
+    );
 
     return results;
 }

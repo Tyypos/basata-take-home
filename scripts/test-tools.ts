@@ -346,9 +346,81 @@ async function mutationTests(): Promise<TestResult[]> {
         }),
     );
 
-    // TODO: book_appointment
-    //   - Requires a slot from find_available_slots
-    //   - Capture state.bookedAppointmentId from the result
+    // 7. book_appointment — success path. Uses the slot captured in step 4.
+    results.push(
+        await runTest({
+            name: 'book_appointment: candidate slot books successfully',
+            toolName: 'book_appointment',
+            args: {
+                patient_id: state.newPatientId,
+                provider_id: state.candidateSlot?.provider_id,
+                start_time: state.candidateSlot?.start_time,
+                appointment_type: state.candidateSlot?.appointment_type,
+                reason: 'Initial cardiology consultation',
+            },
+            expect: (r) => {
+                if (r.status !== 'success')
+                    return `expected status=success, got ${r.status}`;
+                if (!r.appointment?.id) return 'missing appointment.id';
+                if (r.appointment.start_time !== state.candidateSlot?.start_time)
+                    return `start_time mismatch: ${r.appointment.start_time} vs ${state.candidateSlot?.start_time}`;
+                if (typeof r.appointment.is_telehealth !== 'boolean')
+                    return 'appointment.is_telehealth must be boolean';
+                if (
+                    typeof r.appointment.provider_name !== 'string' ||
+                    !r.appointment.provider_name.startsWith('Dr. ')
+                )
+                    return `provider_name not hydrated: ${r.appointment.provider_name}`;
+                state.bookedAppointmentId = r.appointment.id;
+                return true;
+            },
+        }),
+    );
+
+    // 8. book_appointment — slot_taken path. Booking the same slot again
+    //    should 409 since it was just claimed.
+    results.push(
+        await runTest({
+            name: 'book_appointment: re-booking same slot returns slot_taken',
+            toolName: 'book_appointment',
+            args: {
+                patient_id: state.newPatientId,
+                provider_id: state.candidateSlot?.provider_id,
+                start_time: state.candidateSlot?.start_time,
+                appointment_type: state.candidateSlot?.appointment_type,
+            },
+            expect: (r) => {
+                if (r.status !== 'slot_taken')
+                    return `expected status=slot_taken, got ${r.status}`;
+                if (r.appointment)
+                    return 'slot_taken must not include appointment details';
+                return true;
+            },
+        }),
+    );
+
+    // 9. book_appointment — invalid args (bad ISO timestamp).
+    results.push(
+        await runTest({
+            name: 'book_appointment: rejects non-ISO start_time',
+            toolName: 'book_appointment',
+            args: {
+                patient_id: state.newPatientId,
+                provider_id: state.candidateSlot?.provider_id,
+                start_time: '2026-06-01 10:00 AM',
+                appointment_type: state.candidateSlot?.appointment_type,
+            },
+            expect: () => 'expected tool error from invalid start_time, got result',
+        }).then((r) => {
+            if (
+                r.detail?.startsWith('tool error: Invalid arguments:') &&
+                r.detail.includes('start_time')
+            ) {
+                return { name: r.name, passed: true };
+            }
+            return r;
+        }),
+    );
 
     // TODO: list_patient_appointments
     //   - Should return the appointment we just booked

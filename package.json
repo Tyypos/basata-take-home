@@ -8,7 +8,8 @@
         "build": "tsc",
         "start": "node dist/src/index.js",
         "smoke": "tsx scripts/smoke-test.ts",
-        "reset": "tsx scripts/reset.ts"
+        "reset": "tsx scripts/reset.ts",
+        "test": "tsx scripts/test-tools.ts"
     },
     "repository": {
         "type": "git",

@@ -100,3 +100,24 @@ src/tools/lookupPatient/ is the canonical pattern. Match it.
   reschedule_appointment definition.md)
 - 409 conflict on register_patient checks name+DOB before revealing identity
   (soft PHI guardrail)
+
+## Testing
+
+There's a test runner at `scripts/test-tools.ts` (`npm test`). It:
+
+- Resets the EMR sandbox at the start of every run
+- Runs read-only tests in parallel
+- Runs mutation tests sequentially with shared state (e.g., a patient registered early is used by later booking tests)
+
+**When you add a new tool, you MUST also add tests to `scripts/test-tools.ts`.**
+
+- For read-only tools (e.g., `list_providers`), add cases to `readOnlyTests`.
+- For mutation tools (e.g., `book_appointment`), add a section inside `mutationTests()`. Mutation tests can read and write the shared `state` object — capture IDs you create so downstream tests can use them.
+
+Each tool should have tests covering:
+
+1. The happy path / primary success status
+2. At least one alternative status the tool can return (e.g., `not_found`, `slot_taken`, `phone_conflict`)
+3. Where applicable, a guardrail check (e.g., PHI-aware response, defensive filter)
+
+Run `npm test` before declaring a tool done. All tests must pass.

@@ -1,0 +1,15 @@
+{
+  "name": "basata-take-home",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+  "features": {},
+  "forwardPorts": [3000],
+  "postCreateCommand": "npm ci && npm install -g @anthropic-ai/claude-code",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint"
+      ]
+    }
+  }
+}

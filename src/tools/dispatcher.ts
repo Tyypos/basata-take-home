@@ -17,6 +17,7 @@ import { listProviders } from './listProviders/handler.js';
 import { findAvailableSlots } from './findAvailableSlots/handler.js';
 import { bookAppointment } from './bookAppointment/handler.js';
 import { listPatientAppointments } from './listPatientAppointments/handler.js';
+import { cancelAppointment } from './cancelAppointment/handler.js';
 
 // Registry: tool name → handler. New tools get added here.
 // The keys MUST match the function names configured in the VAPI assistant
@@ -28,7 +29,7 @@ const handlers: Record<string, ToolHandler> = {
     find_available_slots: findAvailableSlots,
     book_appointment: bookAppointment,
     list_patient_appointments: listPatientAppointments,
-    // cancel_appointment: cancelAppointment,
+    cancel_appointment: cancelAppointment,
     // reschedule_appointment: rescheduleAppointment,
 };
 

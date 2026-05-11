@@ -485,9 +485,66 @@ async function mutationTests(): Promise<TestResult[]> {
         }),
     );
 
-    // TODO: cancel_appointment
-    //   - Cancel state.bookedAppointmentId
-    //   - Verify status === 'cancelled' in response
+    // 12. cancel_appointment — success path. Cancels the appointment booked
+    //     in step 7.
+    results.push(
+        await runTest({
+            name: 'cancel_appointment: booked appointment cancels successfully',
+            toolName: 'cancel_appointment',
+            args: { appointment_id: state.bookedAppointmentId },
+            expect: (r) => {
+                if (r.status !== 'success')
+                    return `expected status=success, got ${r.status}`;
+                if (r.appointment?.status !== 'cancelled')
+                    return `appointment.status should be 'cancelled', got ${r.appointment?.status}`;
+                if (
+                    typeof r.appointment?.provider_name !== 'string' ||
+                    !r.appointment.provider_name.startsWith('Dr. ')
+                )
+                    return `provider_name not hydrated: ${r.appointment?.provider_name}`;
+                if (!r.appointment?.start_time)
+                    return 'appointment.start_time missing';
+                return true;
+            },
+        }),
+    );
+
+    // 13. cancel_appointment — second cancel returns already_cancelled.
+    results.push(
+        await runTest({
+            name: 'cancel_appointment: re-cancel returns already_cancelled',
+            toolName: 'cancel_appointment',
+            args: { appointment_id: state.bookedAppointmentId },
+            expect: (r) => {
+                if (r.status !== 'already_cancelled')
+                    return `expected status=already_cancelled, got ${r.status}`;
+                if (
+                    typeof r.appointment?.provider_name !== 'string' ||
+                    !r.appointment.provider_name.startsWith('Dr. ')
+                )
+                    return `provider_name not hydrated: ${r.appointment?.provider_name}`;
+                if (!r.appointment?.start_time)
+                    return 'appointment.start_time missing';
+                return true;
+            },
+        }),
+    );
+
+    // 14. cancel_appointment — unknown id returns not_found.
+    results.push(
+        await runTest({
+            name: 'cancel_appointment: unknown id returns not_found',
+            toolName: 'cancel_appointment',
+            args: { appointment_id: 'appt_does_not_exist_xyz' },
+            expect: (r) => {
+                if (r.status !== 'not_found')
+                    return `expected status=not_found, got ${r.status}`;
+                if (r.appointment)
+                    return 'not_found must not include appointment details';
+                return true;
+            },
+        }),
+    );
 
     // TODO: reschedule_appointment
     //   - Book a new appointment, then reschedule it to a different slot

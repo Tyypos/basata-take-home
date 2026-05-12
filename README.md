@@ -42,7 +42,7 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-The default values point at the shared CardioChart Pro EMR sandbox. No secrets required.
+Edit `.env` and set `EMR_BASE_URL` to the CardioChart Pro sandbox URL from the take-home brief.
 
 ### 3. Run the server
 
